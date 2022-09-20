@@ -45,6 +45,10 @@ begin
       Caret.PosX:= NIndent
     else
       Caret.PosX:= 0;
+
+    if FOptConsoleMode then // Console mode
+       FConsoleMode.ConstrainCaret(Caret);
+
   end;
 
   if Caret.PosX=0 then
@@ -146,6 +150,9 @@ begin
       Dec(Caret.PosY);
       Caret.PosX:= Strings.LinesLen[Caret.PosY];
     end;
+
+    if FOptConsoleMode then // Console mode
+       FConsoleMode.ConstrainCaret(Caret);
   end;
 end;
 
@@ -193,6 +200,13 @@ function TATSynEdit.DoCommand_KeyUpDown(ADown: boolean; ALines: integer;
 var
   NRelative: integer;
 begin
+
+  if FOptConsoleMode then begin // console mode
+    FConsoleMode.DoReqestHistory(not ADown);
+    exit([cResultText]);
+  end;
+
+
   FCaretSpecPos:= true;
 
   if AKeepRelativePos then

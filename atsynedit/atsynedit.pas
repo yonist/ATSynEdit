@@ -56,7 +56,8 @@ uses
   ATSynEdit_Adapters,
   ATSynEdit_LinkCache,
   ATSynEdit_FGL,
-  ATScrollBar;
+  ATScrollBar,
+  ATConsole;
 
 {$ifdef LCLGTK2}
   {$if (LCL_FULLVERSION >= 2030000)}
@@ -527,6 +528,9 @@ type
   end;
 
 type
+
+  TATConsole = class; // forward declaration
+
   { TATSynEdit }
 
   TATSynEdit = class(TCustomControl)
@@ -991,6 +995,8 @@ type
     {$ifdef LCLGTK2}
     FIMSelText: string;
     {$endif}
+    FOptConsoleMode : boolean;
+    FConsoleMode : TATConsole;
 
     //
     function DoCalcForegroundFromAttribs(AX, AY: integer; var AColor: TColor;
@@ -2062,6 +2068,36 @@ type
     property OptZebraStep: integer read FOptZebraStep write FOptZebraStep default 2;
     property OptZebraAlphaBlend: byte read FOptZebraAlphaBlend write FOptZebraAlphaBlend default cInitZebraAlphaBlend;
     property OptDimUnfocusedBack: integer read FOptDimUnfocusedBack write FOptDimUnfocusedBack default cInitDimUnfocusedBack;
+  end;
+
+ { TATConsole }
+
+  TATConsole = class
+    private
+      FPrompt : string;
+      FEditor : TATSynEdit;
+      FOnCommandExecute: TCommandExecuteEvent;
+      FOnRequestHistory: TRequestHistory;
+      FSpinner : TConsoleSpinner;
+      function GetHideCaret: boolean;
+      procedure SetPrompt(AValue: string);
+      function GetLine(const withPrompt: boolean = true; const back : integer = 0) : string;
+      function GetCurrentLine() : string;
+      procedure SpinnerCallback(const AText: string; const rewriteLine : boolean = false );
+    protected
+      function CanMoveCaret(const X, Y: integer) : boolean;
+      procedure ConstrainCaret(const caret: TATCaretItem);
+      procedure DoCommandEntered();
+      procedure DoReqestHistory(const prev : boolean);
+      procedure PositionCaretAtTheEnd(const caret: TATCaretItem);
+      property HideCaret : boolean read GetHideCaret;
+
+
+    public
+      constructor Create(const editor: TATSynEdit);
+      property OnCommandExecute: TCommandExecuteEvent read FOnCommandExecute write FOnCommandExecute;
+      property OnRequestHistory: TRequestHistory read FOnRequestHistory write FOnRequestHistory;
+      property Prompt : string read FPrompt write SetPrompt;
   end;
 
 const
@@ -5023,6 +5059,10 @@ begin
   FMenuMicromap:= nil;
   FMenuRuler:= nil;
 
+  // Console mode
+  FOptConsoleMode:= true;
+  FConsoleMode:= TATConsole.Create(self);
+
   //must call UpdateTabHelper also before first Paint
   UpdateTabHelper;
   //must call before first paint
@@ -6143,12 +6183,16 @@ begin
         FMouseDragDropping:= true;
       end
       else
-      begin
-        if Assigned(FOnClickMoveCaret) then
-          FOnClickMoveCaret(Self, Point(Carets[0].PosX, Carets[0].PosY), FMouseDownPnt);
+      begin // a single simple click move
+        if (FOptConsoleMode and FConsoleMode.CanMoveCaret(FMouseDownPnt.X, FMouseDownPnt.Y))
+           or (not FOptConsoleMode) then begin
 
-        DoCaretSingle(FMouseDownPnt.X, FMouseDownPnt.Y);
-        DoSelect_None;
+          if Assigned(FOnClickMoveCaret) then
+            FOnClickMoveCaret(Self, Point(Carets[0].PosX, Carets[0].PosY), FMouseDownPnt);
+
+          DoCaretSingle(FMouseDownPnt.X, FMouseDownPnt.Y);
+          DoSelect_None;
+        end;
       end;
     end;
 
@@ -7023,6 +7067,8 @@ procedure TATSynEdit.TimerBlinkTick(Sender: TObject);
 begin
   if not FCaretShowEnabled then exit;
   if not Application.Active then exit;
+
+  if FOptConsoleMode and FConsoleMode.HideCaret then exit;
 
   if FCaretStopUnfocused and not _IsFocused then
     if FCaretShown then
@@ -10169,6 +10215,118 @@ begin
     FStringsInt.OnSetAttribsArray:= nil;
   end;
 end;
+
+{ TATConsole }
+
+procedure TATConsole.SetPrompt(AValue: string);
+begin
+  if FPrompt=AValue then Exit;
+  FPrompt:=AValue;
+end;
+
+function TATConsole.GetHideCaret: boolean;
+begin
+  result := FSpinner.IsActive;
+end;
+
+function TATConsole.GetLine(const withPrompt: boolean; const back: integer
+  ): string;
+begin
+  result := FEditor.Strings.Lines[FEditor.Strings.count-(1+back)];
+  if not withPrompt then
+    delete(result, 1, UTF8LengthFast(FPrompt));
+end;
+
+function TATConsole.GetCurrentLine(): string;
+begin
+  result := GetLine();
+end;
+
+procedure TATConsole.SpinnerCallback(const AText: string;
+  const rewriteLine: boolean);
+begin
+  FEditor.Strings.Lines[FEditor.Strings.count-1] := AText;
+  FEditor.Invalidate;
+end;
+
+constructor TATConsole.Create(const editor: TATSynEdit);
+begin
+  FEditor := editor;
+  FPrompt := 'go >';
+  FEditor.Strings.Lines[0] := FPrompt;
+
+  FSpinner := TConsoleSpinner.Create(@SpinnerCallback);
+  //FEditor.Strings.Lines[0] :=  FEditor.Strings.Lines[0] + FEditor.Strings.Count.ToString();
+  FEditor.OptGutterVisible:= false;
+  FEditor.OptRulerVisible:=  false;
+  //FEditor.OptMouseDragDrop:= false;
+  FEditor.OptUnprintedVisible:= false;
+  FEditor.FOptShowMouseSelFrame:= false;
+  FEditor.FOptAutoIndentBetterBracketsCurly:= false;
+  FEditor.FOptAutoIndentBetterBracketsRound:= false;
+  FEditor.FOptAutoIndentBetterBracketsSquare:= false;
+  FEditor.FOptMouseClickOpensURL:= true;
+  FEditor.OptCaretManyAllowed:= false;
+
+  FEditor.Colors.TextFont:= clWhite;
+  FEditor.Colors.TextBG:= clBlack;
+
+  ConstrainCaret(FEditor.Carets[0]);
+  //FEditor.ModeOneLine:=true;
+end;
+
+function TATConsole.CanMoveCaret(const X, Y: integer): boolean;
+begin
+  result := (X >= FPrompt.Length + 1) and (Y + 1 = FEditor.Strings.Count);
+end;
+
+procedure TATConsole.ConstrainCaret(const caret: TATCaretItem);
+begin
+  if caret.PosX < FPrompt.Length + 1 then
+    caret.PosX := FPrompt.Length + 1;
+
+  if caret.PosY <> FEditor.Strings.Count -1 then
+    caret.PosY := FEditor.Strings.Count - 1;
+end;
+
+procedure TATConsole.DoCommandEntered();
+var
+  status : TCommandExecuteResult;
+  commandResult : string;
+begin
+  if not Assigned(FOnCommandExecute) then exit();
+  FOnCommandExecute(self, GetLine(false,1).Trim(), status, commandResult);
+  case status of
+    cerSync:
+      FEditor.Strings.LineAdd(commandResult);
+    cerAsyncWait: begin
+      FEditor.FCaretShowEnabled:= false;
+      FSpinner.Start();
+
+    end;
+  end;
+
+  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
+  ConstrainCaret(FEditor.Carets[0]);
+end;
+
+procedure TATConsole.DoReqestHistory(const prev: boolean);
+var
+  historyItem : string;
+begin
+  if not Assigned(FOnRequestHistory) then exit();
+
+  FOnRequestHistory(self,prev,historyItem);
+
+  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt + ' ' + historyItem;
+  FEditor.Carets[0].PosX:= UTF8LengthFast(FEditor.Strings.Lines[FEditor.Strings.Count-1]);
+end;
+
+procedure TATConsole.PositionCaretAtTheEnd(const caret: TATCaretItem);
+begin
+  caret.PosX := UTF8LengthFast(GetCurrentLine());
+end;
+
 
 {$I atsynedit_carets.inc}
 {$I atsynedit_hilite.inc}

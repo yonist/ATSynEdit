@@ -266,6 +266,8 @@ begin
       PosAfter);
     Caret.PosX:= PosAfter.X;
     Caret.PosY:= PosAfter.Y;
+    if FOptConsoleMode then // Console mode
+       FConsoleMode.ConstrainCaret(Caret);
     Caret.EndX:= -1;
     Caret.EndY:= -1;
 
@@ -321,6 +323,14 @@ var
 begin
   Result:= [];
   if ModeReadOnly then Exit;
+
+  if FOptConsoleMode then begin // Console mode
+     Carets[0].GetRange(X1, Y1, X2, Y2, bSel);
+     if Y1 <> Y2 then
+        exit;
+  end;
+
+
   St:= Strings;
 
   if not IsSelRectEmpty and not OptCaretManyAllowed then
@@ -463,6 +473,10 @@ begin
 
   DoSelectionDeleteOrReset;
 
+  // Assuming there is only one cursor...
+  if FOptConsoleMode then // Console mode
+    FConsoleMode.PositionCaretAtTheEnd(FCarets[0]);
+
   for iCaret:= FCarets.Count-1 downto 0 do
   begin
     Caret:= FCarets[iCaret];
@@ -509,6 +523,9 @@ begin
 
   if bNeedGroup then
     St.EndUndoGroup;
+
+  if FOptConsoleMode then // Console mode
+    FConsoleMode.DoCommandEntered();
 
   Result:= [cResultText, cResultCaretBottom];
 end;
