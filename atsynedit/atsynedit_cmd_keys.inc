@@ -10,6 +10,8 @@ var
 begin
   if FCarets.Count=0 then exit([]);
 
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
+
   if ModeOneLine then
   begin
     Caret:= FCarets[0];
@@ -69,6 +71,8 @@ var
   Details: TATEditorPosDetails;
 begin
   if FCarets.Count=0 then exit([]);
+
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
   St:= Strings;
 
   if ModeOneLine then
@@ -122,6 +126,8 @@ var
   bMultiCarets: boolean;
   i: integer;
 begin
+
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
   //changed because of issue CudaText#3065
   Result:= [cResultCaretLeft, cResultCaretLazy];
 
@@ -163,6 +169,7 @@ var
   bMultiCarets: boolean;
   i: integer;
 begin
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
   //changed because of issue CudaText#3065
   Result:= [cResultCaretRight, cResultCaretLazy];
 
@@ -202,6 +209,8 @@ var
 begin
 
   if FOptConsoleMode then begin // console mode
+    if FConsoleMode.BlockedInput
+       then exit([]); // exit on blocked input
     FConsoleMode.DoReqestHistory(not ADown);
     exit([cResultText]);
   end;
@@ -229,6 +238,9 @@ var
   NCount: integer;
   i, Y: integer;
 begin
+
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
+
   St:= Strings;
   NCount:= St.Count;
   for i:= 0 to Carets.Count-1 do
@@ -279,6 +291,9 @@ const
   cGapActions: array[boolean] of TATEditorGapCoordAction =
     (cGapCoordIgnore, cGapCoordMoveDown);
 begin
+
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
+
   St:= Strings;
   for iCaret:= 0 to FCarets.Count-1 do
   begin
@@ -351,6 +366,9 @@ function TATSynEdit.DoCommand_TextBackspace: TATCommandResults;
 var
   bColBlock: boolean;
 begin
+
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit([]); // Console mode, exit on blocked input
+
   bColBlock:= not IsSelRectEmpty;
 
   if bColBlock then

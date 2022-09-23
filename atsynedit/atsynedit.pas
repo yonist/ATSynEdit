@@ -1526,6 +1526,7 @@ type
     property CaretShapeNormal: TATCaretShape read FCaretShapeNormal;
     property CaretShapeOverwrite: TATCaretShape read FCaretShapeOverwrite;
     property CaretShapeReadonly: TATCaretShape read FCaretShapeReadonly;
+    property Console: TATConsole read FConsoleMode;
     //common
     property FontProportional: boolean read FFontProportional;
     property EncodingName: string read GetEncodingName write SetEncodingName;
@@ -2074,10 +2075,12 @@ type
 
   TATConsole = class
     private
-      FPrompt : string;
+      FBlockedInput : boolean; // in async mode, blocked the input until there is a resuls
       FEditor : TATSynEdit;
+      FPrompt : string;
       FOnCommandExecute: TCommandExecuteEvent;
       FOnRequestHistory: TRequestHistory;
+      FOnCacelRequest: TCancelRequest;
       FSpinner : TConsoleSpinner;
       function GetHideCaret: boolean;
       procedure SetPrompt(AValue: string);
@@ -2095,6 +2098,8 @@ type
 
     public
       constructor Create(const editor: TATSynEdit);
+      property BlockedInput: boolean read FBlockedInput;
+      property OnCacelRequest: TCancelRequest read FOnCacelRequest write FOnCacelRequest;
       property OnCommandExecute: TCommandExecuteEvent read FOnCommandExecute write FOnCommandExecute;
       property OnRequestHistory: TRequestHistory read FOnRequestHistory write FOnRequestHistory;
       property Prompt : string read FPrompt write SetPrompt;
@@ -10255,6 +10260,8 @@ begin
   FPrompt := 'go >';
   FEditor.Strings.Lines[0] := FPrompt;
 
+  FBlockedInput := false;
+
   FSpinner := TConsoleSpinner.Create(@SpinnerCallback);
   //FEditor.Strings.Lines[0] :=  FEditor.Strings.Lines[0] + FEditor.Strings.Count.ToString();
   FEditor.OptGutterVisible:= false;
@@ -10266,6 +10273,8 @@ begin
   FEditor.FOptAutoIndentBetterBracketsRound:= false;
   FEditor.FOptAutoIndentBetterBracketsSquare:= false;
   FEditor.FOptMouseClickOpensURL:= true;
+  FEditor.FMarginRight := 5000; // hiding the margin even on 4k displays
+  FEditor.FWrapMode := TATEditorWrapMode.cWrapOn; // wrap on window border
   FEditor.OptCaretManyAllowed:= false;
 
   FEditor.Colors.TextFont:= clWhite;
@@ -10297,16 +10306,26 @@ begin
   if not Assigned(FOnCommandExecute) then exit();
   FOnCommandExecute(self, GetLine(false,1).Trim(), status, commandResult);
   case status of
-    cerSync:
-      FEditor.Strings.LineAdd(commandResult);
+
+    cerAsync: begin
+      FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
+    end;
+
+    cerSync: begin
+      if commandResult <> '' then
+        FEditor.Strings.LineAdd(commandResult);
+      FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
+    end;
+
     cerAsyncWait: begin
-      FEditor.FCaretShowEnabled:= false;
+      FBlockedInput := true;
+      FEditor.FCaretShowEnabled := false;
+      FEditor.Strings.Lines[FEditor.Strings.Count-1] := ' ';
       FSpinner.Start();
+      FBlockedInput:= true;
 
     end;
   end;
-
-  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
   ConstrainCaret(FEditor.Carets[0]);
 end;
 

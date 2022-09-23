@@ -49,6 +49,7 @@ var
 begin
   Result:= [];
   if ModeReadOnly then Exit;
+  if FOptConsoleMode and FConsoleMode.BlockedInput then exit; // Console mode, exit on blocked input
   TextItems:= nil;
   St:= Strings;
 
@@ -464,6 +465,7 @@ begin
   Result:= [];
   if ModeReadOnly then Exit;
   if ModeOneLine then Exit;
+  if FOptConsoleMode and FConsoleMode.BlockedInput then Exit;
 
   St:= Strings;
   bNeedGroup:= Carets.Count>1;
@@ -526,6 +528,7 @@ begin
 
   if FOptConsoleMode then // Console mode
     FConsoleMode.DoCommandEntered();
+
 
   Result:= [cResultText, cResultCaretBottom];
 end;
