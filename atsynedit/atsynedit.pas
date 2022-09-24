@@ -2080,7 +2080,7 @@ type
       FPrompt : string;
       FOnCommandExecute: TCommandExecuteEvent;
       FOnRequestHistory: TRequestHistory;
-      FOnCacelRequest: TCancelRequest;
+      FOnCancelRequest: TCancelRequest;
       FSpinner : TConsoleSpinner;
       function GetHideCaret: boolean;
       procedure SetPrompt(AValue: string);
@@ -2090,16 +2090,16 @@ type
     protected
       function CanMoveCaret(const X, Y: integer) : boolean;
       procedure ConstrainCaret(const caret: TATCaretItem);
-      procedure DoCommandEntered();
-      procedure DoReqestHistory(const prev : boolean);
       procedure PositionCaretAtTheEnd(const caret: TATCaretItem);
       property HideCaret : boolean read GetHideCaret;
-
-
     public
       constructor Create(const editor: TATSynEdit);
+      procedure DoCommandEntered();
+      procedure DoCancelRequest();
+      procedure DoReqestHistory(const prev : boolean);
+      procedure StopAsync(const AText: string);
       property BlockedInput: boolean read FBlockedInput;
-      property OnCacelRequest: TCancelRequest read FOnCacelRequest write FOnCacelRequest;
+      property OnCancelRequest: TCancelRequest read FOnCancelRequest write FOnCancelRequest;
       property OnCommandExecute: TCommandExecuteEvent read FOnCommandExecute write FOnCommandExecute;
       property OnRequestHistory: TRequestHistory read FOnRequestHistory write FOnRequestHistory;
       property Prompt : string read FPrompt write SetPrompt;
@@ -10273,6 +10273,7 @@ begin
   FEditor.FOptAutoIndentBetterBracketsRound:= false;
   FEditor.FOptAutoIndentBetterBracketsSquare:= false;
   FEditor.FOptMouseClickOpensURL:= true;
+  FEditor.FOptCopyLinesIfNoSel := false; // TATSynEdit has the option to copy the current line to clipboard if nothing selected. This option prevents canceling a command. So disable it
   FEditor.FMarginRight := 5000; // hiding the margin even on 4k displays
   FEditor.FWrapMode := TATEditorWrapMode.cWrapOn; // wrap on window border
   FEditor.OptCaretManyAllowed:= false;
@@ -10329,6 +10330,12 @@ begin
   ConstrainCaret(FEditor.Carets[0]);
 end;
 
+procedure TATConsole.DoCancelRequest();
+begin
+  if Assigned(FOnCancelRequest) then
+    FOnCancelRequest(self);
+end;
+
 procedure TATConsole.DoReqestHistory(const prev: boolean);
 var
   historyItem : string;
@@ -10339,6 +10346,22 @@ begin
 
   FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt + ' ' + historyItem;
   FEditor.Carets[0].PosX:= UTF8LengthFast(FEditor.Strings.Lines[FEditor.Strings.Count-1]);
+end;
+
+procedure TATConsole.StopAsync(const AText: string);
+begin
+  if not FBlockedInput then exit; // not BlockedInput so the console is not in "async" mode
+
+  FSpinner.Stop();
+
+
+  FEditor.Strings.Lines[FEditor.Strings.Count-1] := AText;
+  FEditor.Strings.LineAddRaw(FPrompt,TATLineEnds.cEndNone,false); // add the prompt without adding a newline at the end. So it doesn't create another line
+
+  FBlockedInput := false;
+  FEditor.FCaretShowEnabled := true;
+  ConstrainCaret(FEditor.Carets[0]);
+
 end;
 
 procedure TATConsole.PositionCaretAtTheEnd(const caret: TATCaretItem);

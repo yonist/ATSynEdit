@@ -19,7 +19,7 @@ type
   TRequestHistory = procedure(const Sender: TObject; const prev : boolean;
      var historyItem : string) of object;
 
-  TCancelRequest = procedure () of object; // when a command rans in cerAsyncWait, and the user request to cancel it
+  TCancelRequest = procedure (const sender: TObject) of object; // when a command rans in cerAsyncWait, and the user request to cancel it. TODO: add option to send to background (ctrl+z)
 
   TConsoleSpinnerType = (csDots, csDots4, csPipes); // the look of the spinner
 
