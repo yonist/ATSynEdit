@@ -2074,22 +2074,31 @@ type
  { TATConsole }
 
   TATConsole = class
+    type
+      TBoot = procedure (const sender: TATConsole;var prompt : string) of object;
+      TCancelRequest = procedure (const sender: TATConsole) of object; // when a command rans in cerAsyncWait, and the user request to cancel it. TODO: add option to send to background (ctrl+z)
+      TCommandExecuteEvent = procedure(const Sender: TATConsole; const ACommand: string;
+          var status: TCommandExecuteResult; var commandResult : string) of object;
+      TRequestHistory = procedure(const Sender: TATConsole; const prev : boolean;
+           var historyItem : string) of object;
     private
-      FBlockedInput : boolean; // in async mode, blocked the input until there is a resuls
-      FEditor : TATSynEdit;
-      FPrompt : string;
+      FActive: boolean;
+      FBlockedInput: boolean; // in async mode, blocked the input until there is a resuls
+      FEditor: TATSynEdit;
+      FPrompt: string;
+      FOnBoot: TBoot;
+      FOnCancelRequest: TCancelRequest;
       FOnCommandExecute: TCommandExecuteEvent;
       FOnRequestHistory: TRequestHistory;
-      FOnCancelRequest: TCancelRequest;
-      FSpinner : TConsoleSpinner;
+      FSpinner: TConsoleSpinner;
       function GetHideCaret: boolean;
-      procedure SetPrompt(AValue: string);
+      procedure SetPrompt(const AValue: string);
       function GetLine(const withPrompt: boolean = true; const back : integer = 0) : string;
       function GetCurrentLine() : string;
       procedure SpinnerCallback(const AText: string; const rewriteLine : boolean = false );
     protected
       function CanMoveCaret(const X, Y: integer) : boolean;
-      procedure ConstrainCaret(const caret: TATCaretItem);
+      procedure ConstrainCaret(const caret: TATCaretItem; const afterPrompt: boolean= false);
       procedure PositionCaretAtTheEnd(const caret: TATCaretItem);
       property HideCaret : boolean read GetHideCaret;
     public
@@ -2098,7 +2107,10 @@ type
       procedure DoCancelRequest();
       procedure DoReqestHistory(const prev : boolean);
       procedure StopAsync(const AText: string);
+      procedure AddLine(const line: string);
+      procedure Activate();
       property BlockedInput: boolean read FBlockedInput;
+      property OnBoot : TBoot read FOnBoot write FOnBoot;
       property OnCancelRequest: TCancelRequest read FOnCancelRequest write FOnCancelRequest;
       property OnCommandExecute: TCommandExecuteEvent read FOnCommandExecute write FOnCommandExecute;
       property OnRequestHistory: TRequestHistory read FOnRequestHistory write FOnRequestHistory;
@@ -10223,7 +10235,7 @@ end;
 
 { TATConsole }
 
-procedure TATConsole.SetPrompt(AValue: string);
+procedure TATConsole.SetPrompt(const AValue: string);
 begin
   if FPrompt=AValue then Exit;
   FPrompt:=AValue;
@@ -10255,10 +10267,11 @@ begin
 end;
 
 constructor TATConsole.Create(const editor: TATSynEdit);
+var
+  fixedWidthFontList : TFixedWidthFontList;
 begin
   FEditor := editor;
-  FPrompt := 'go >';
-  FEditor.Strings.Lines[0] := FPrompt;
+  FActive := false;
 
   FBlockedInput := false;
 
@@ -10281,6 +10294,11 @@ begin
   FEditor.Colors.TextFont:= clWhite;
   FEditor.Colors.TextBG:= clBlack;
 
+  fixedWidthFontList := TFixedWidthFontList.Create();
+  FEditor.Font.Name := fixedWidthFontList.GetFontWithDefault('Consolas', '');
+  FEditor.Font.Size:=18;
+  FreeAndNil(fixedWidthFontList);
+
   ConstrainCaret(FEditor.Carets[0]);
   //FEditor.ModeOneLine:=true;
 end;
@@ -10290,10 +10308,15 @@ begin
   result := (X >= FPrompt.Length + 1) and (Y + 1 = FEditor.Strings.Count);
 end;
 
-procedure TATConsole.ConstrainCaret(const caret: TATCaretItem);
+procedure TATConsole.ConstrainCaret(const caret: TATCaretItem;
+  const afterPrompt: boolean);
 begin
-  if caret.PosX < FPrompt.Length + 1 then
-    caret.PosX := FPrompt.Length + 1;
+  if caret.PosX < FPrompt.Length + 1  then begin
+    if afterPrompt then
+      caret.PosX := UTF8LengthFast(FPrompt)+1
+    else
+      caret.PosX := UTF8LengthFast(GetCurrentLine())+1;
+  end;
 
   if caret.PosY <> FEditor.Strings.Count -1 then
     caret.PosY := FEditor.Strings.Count - 1;
@@ -10362,6 +10385,23 @@ begin
   FEditor.FCaretShowEnabled := true;
   ConstrainCaret(FEditor.Carets[0]);
 
+end;
+
+procedure TATConsole.AddLine(const line: string);
+begin
+  FEditor.Strings.LineAdd(line);
+end;
+
+procedure TATConsole.Activate();
+
+begin
+  if FActive then exit; // Activate cann only be called once. Raise exception???
+
+  if Assigned(FOnBoot) then FOnBoot(self, FPrompt);
+  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
+  ConstrainCaret(FEditor.Carets[0]);
+
+  FActive:= true;
 end;
 
 procedure TATConsole.PositionCaretAtTheEnd(const caret: TATCaretItem);

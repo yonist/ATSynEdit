@@ -49,7 +49,7 @@ begin
       Caret.PosX:= 0;
 
     if FOptConsoleMode then // Console mode
-       FConsoleMode.ConstrainCaret(Caret);
+       FConsoleMode.ConstrainCaret(Caret, true);
 
   end;
 
@@ -158,7 +158,7 @@ begin
     end;
 
     if FOptConsoleMode then // Console mode
-       FConsoleMode.ConstrainCaret(Caret);
+       FConsoleMode.ConstrainCaret(Caret,True);
   end;
 end;
 

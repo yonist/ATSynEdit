@@ -64,8 +64,14 @@ begin
     if bNeedGroup then
       St.BeginUndoGroup;
 
-    if Carets.IsSelection then
-      Result:= DoCommand_TextDeleteSelection;
+    if Carets.IsSelection then begin
+      if not FOptConsoleMode then
+        Result:= DoCommand_TextDeleteSelection
+      else begin
+        Carets[0].SelectNone();
+        Console.ConstrainCaret(Carets[0]);
+      end
+    end;
 
     //TextItems allows to insert each clipboard line into its own caret
     //when count of carets = count of clipboard lines

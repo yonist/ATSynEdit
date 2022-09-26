@@ -5,7 +5,7 @@ unit ATConsole;
 interface
 
 uses
-  Classes, SysUtils, CustomTimer;
+  Classes, SysUtils, LCLType, CustomTimer;
 
 type
   TCommandExecuteResult = (cerSync,  // immediate result
@@ -13,22 +13,14 @@ type
                            cerAsyncWait // the command will run in async but the console will wait on input
                            );
 
-  TCommandExecuteEvent = procedure(const Sender: TObject; const ACommand: string;
-     var status: TCommandExecuteResult; var commandResult : string) of object;
-
-  TRequestHistory = procedure(const Sender: TObject; const prev : boolean;
-     var historyItem : string) of object;
-
-  TCancelRequest = procedure (const sender: TObject) of object; // when a command rans in cerAsyncWait, and the user request to cancel it. TODO: add option to send to background (ctrl+z)
-
   TConsoleSpinnerType = (csDots, csDots4, csPipes); // the look of the spinner
 
-
-  TWriteCallback = procedure(const AText: string; const rewriteLine : boolean = false ) of object;
 
   { TConsoleSpinner }
 
   TConsoleSpinner = class
+    type
+       TWriteCallback = procedure(const AText: string; const rewriteLine : boolean = false ) of object;
     private
       FActive : boolean;
       FTimer : TCustomTimer;
@@ -46,8 +38,84 @@ type
       procedure Stop();
   end;
 
+  { TFixedWidthFontList }
+
+  TFixedWidthFontList = class(TStringList)
+    private
+      procedure LoadFonts();
+    public
+      constructor Create();
+      function GetFontWithDefault(const name,defaultFont : string) : string;
+  end;
 
 implementation
+
+uses
+  LCLIntf;
+{ TFixedWidthFontList }
+
+
+function EnumFontsNoDups(var LogFont: TEnumLogFontEx; var Metric: TNewTextMetricEx; FontType: Longint; Data: LParam): LongInt; stdcall;
+var
+  L: TFixedWidthFontList;
+  S: String;
+begin
+  L := TFixedWidthFontList(ptrint(Data));
+  S := LogFont.elfLogFont.lfFaceName;
+  if  ((logfont.elfLogFont.lfPitchAndFamily and MONO_FONT) = MONO_FONT) or
+      ((logfont.elfLogFont.lfPitchAndFamily and FIXED_PITCH) = FIXED_PITCH) then
+    L.Add(S);
+
+  result := 1;
+end;
+
+constructor TFixedWidthFontList.Create();
+begin
+  inherited;
+  Duplicates := TDuplicates.dupIgnore;
+  CaseSensitive := false;
+  LoadFonts();
+end;
+
+function TFixedWidthFontList.GetFontWithDefault(const name, defaultFont: string
+  ): string;
+var
+  index : integer;
+begin
+  if Count = 0 then
+    raise Exception.Create('There are not fixed fonts on the system');
+
+  index := IndexOf(name);
+  if index > -1 then
+    exit(Get(index));
+
+  index := IndexOf(defaultFont);
+  if index > -1 then
+    exit(Get(index));
+
+  result := Get(0);
+end;
+
+procedure TFixedWidthFontList.LoadFonts();
+var
+  DC: HDC;
+  lf: TLogFont;
+  i: Integer;
+
+begin
+  lf.lfCharSet := DEFAULT_CHARSET;
+  lf.lfFaceName := '';
+  lf.lfPitchAndFamily := 0;  //Set this to FIXED_PITCH on Linux/GTK2
+  DC := GetDC(0);
+  try
+    EnumFontFamiliesEX(DC, @lf, @EnumFontsNoDups, ptrint(self), 0);
+    self.Sort;
+  finally
+    ReleaseDC(0, DC);
+  end;
+
+end;
+
 
 procedure TConsoleSpinner.WriteSpinner(sender: TObject);
 begin
