@@ -56,8 +56,7 @@ uses
   ATSynEdit_Adapters,
   ATSynEdit_LinkCache,
   ATSynEdit_FGL,
-  ATScrollBar,
-  ATConsole;
+  ATScrollBar;
 
 {$ifdef LCLGTK2}
   {$if (LCL_FULLVERSION >= 2030000)}
@@ -457,12 +456,12 @@ const
   cUrlRegex_Email = '\b(mailto:)?\w[\w\-\+\.]*@\w[\w\-\.]*\.\w{2,}\b';
   cUrlRegex_WebBegin = 'https?://|ftp://|magnet:\?|www\.|ftp\.';
   cUrlRegex_WebSite = '\w[\w\-\.@]*(:\d+)?'; // @ for password; :\d+ is port
-  cUrlRegex_WebAnchor = '(\#[\w\-/]*)?';
+  cUrlRegex_WebAnchor = '(\#[\w\-%]*)?';
   cUrlRegex_WebParams = '(\?[^<>''"\s]+)?';
   cUrlRegex_Web =
     '\b(' + cUrlRegex_WebBegin + ')'
     + cUrlRegex_WebSite
-    + '(/[~\w\.\-\+\/%@]*)?' //folders
+    + '(/[~\w\.\-\+\/%@!%\#]*)?' //folders
     + cUrlRegex_WebParams
     + cUrlRegex_WebAnchor;
   cUrlRegexInitial = cUrlRegex_Email + '|' + cUrlRegex_Web;
@@ -528,9 +527,6 @@ type
   end;
 
 type
-
-  TATConsole = class; // forward declaration
-
   { TATSynEdit }
 
   TATSynEdit = class(TCustomControl)
@@ -704,6 +700,7 @@ type
     FOnDrawRuler: TATSynEditDrawRectEvent;
     FOnCommand: TATSynEditCommandEvent;
     FOnCommandAfter: TATSynEditCommandAfterEvent;
+    FOnCalcCaretsCoords: TNotifyEvent;
     FOnCalcHilite: TATSynEditCalcHiliteEvent;
     FOnCalcStaple: TATSynEditCalcStapleEvent;
     FOnCalcBookmarkColor: TATSynEditCalcBookmarkColorEvent;
@@ -830,6 +827,7 @@ type
     FOptAutocompleteCommitIfSingleItem: boolean;
 
     //options
+    FOptFlickerReducingPause: integer;
     FOptInputNumberOnly: boolean;
     FOptInputNumberAllowNegative: boolean;
     FOptMaskChar: WideChar;
@@ -995,8 +993,6 @@ type
     {$ifdef LCLGTK2}
     FIMSelText: string;
     {$endif}
-    FOptConsoleMode : boolean;
-    FConsoleMode : TATConsole;
 
     //
     function DoCalcForegroundFromAttribs(AX, AY: integer; var AColor: TColor;
@@ -1526,7 +1522,6 @@ type
     property CaretShapeNormal: TATCaretShape read FCaretShapeNormal;
     property CaretShapeOverwrite: TATCaretShape read FCaretShapeOverwrite;
     property CaretShapeReadonly: TATCaretShape read FCaretShapeReadonly;
-    property Console: TATConsole read FConsoleMode;
     //common
     property FontProportional: boolean read FFontProportional;
     property EncodingName: string read GetEncodingName write SetEncodingName;
@@ -1817,11 +1812,13 @@ type
     property OnDrawMicromap: TATSynEditDrawRectEvent read FOnDrawMicromap write FOnDrawMicromap;
     property OnDrawEditor: TATSynEditDrawRectEvent read FOnDrawEditor write FOnDrawEditor;
     property OnDrawRuler: TATSynEditDrawRectEvent read FOnDrawRuler write FOnDrawRuler;
+    property OnCalcCaretsCoords: TNotifyEvent read FOnCalcCaretsCoords write FOnCalcCaretsCoords;
     property OnCalcHilite: TATSynEditCalcHiliteEvent read FOnCalcHilite write FOnCalcHilite;
     property OnCalcStaple: TATSynEditCalcStapleEvent read FOnCalcStaple write FOnCalcStaple;
     property OnCalcTabSize: TATStringTabCalcEvent read FOnCalcTabSize write FOnCalcTabSize;
     property OnCalcBookmarkColor: TATSynEditCalcBookmarkColorEvent read FOnCalcBookmarkColor write FOnCalcBookmarkColor;
     property OnBeforeCalcHilite: TNotifyEvent read FOnBeforeCalcHilite write FOnBeforeCalcHilite;
+    property OnPaint;
     property OnPaste: TATSynEditPasteEvent read FOnPaste write FOnPaste;
     property OnHotspotEnter: TATSynEditHotspotEvent read FOnHotspotEnter write FOnHotspotEnter;
     property OnHotspotExit: TATSynEditHotspotEvent read FOnHotspotExit write FOnHotspotExit;
@@ -1850,6 +1847,7 @@ type
     property OptAutocompleteUpDownAtEdge: integer read FOptAutocompleteUpDownAtEdge write FOptAutocompleteUpDownAtEdge default 1;
     property OptAutocompleteCommitIfSingleItem: boolean read FOptAutocompleteCommitIfSingleItem write FOptAutocompleteCommitIfSingleItem default false;
 
+    property OptFlickerReducingPause: integer read FOptFlickerReducingPause write FOptFlickerReducingPause default 0;
     property OptInputNumberOnly: boolean read FOptInputNumberOnly write FOptInputNumberOnly default false;
     property OptInputNumberAllowNegative: boolean read FOptInputNumberAllowNegative write FOptInputNumberAllowNegative default cInitInputNumberAllowNegative;
     property OptMaskChar: WideChar read FOptMaskChar write FOptMaskChar default cInitMaskChar;
@@ -2069,52 +2067,6 @@ type
     property OptZebraStep: integer read FOptZebraStep write FOptZebraStep default 2;
     property OptZebraAlphaBlend: byte read FOptZebraAlphaBlend write FOptZebraAlphaBlend default cInitZebraAlphaBlend;
     property OptDimUnfocusedBack: integer read FOptDimUnfocusedBack write FOptDimUnfocusedBack default cInitDimUnfocusedBack;
-  end;
-
- { TATConsole }
-
-  TATConsole = class
-    type
-      TBoot = procedure (const sender: TATConsole;var prompt : string) of object;
-      TCancelRequest = procedure (const sender: TATConsole) of object; // when a command rans in cerAsyncWait, and the user request to cancel it. TODO: add option to send to background (ctrl+z)
-      TCommandExecuteEvent = procedure(const Sender: TATConsole; const ACommand: string;
-          var status: TCommandExecuteResult; var commandResult : string) of object;
-      TRequestHistory = procedure(const Sender: TATConsole; const prev : boolean;
-           var historyItem : string) of object;
-    private
-      FActive: boolean;
-      FBlockedInput: boolean; // in async mode, blocked the input until there is a resuls
-      FEditor: TATSynEdit;
-      FPrompt: string;
-      FOnBoot: TBoot;
-      FOnCancelRequest: TCancelRequest;
-      FOnCommandExecute: TCommandExecuteEvent;
-      FOnRequestHistory: TRequestHistory;
-      FSpinner: TConsoleSpinner;
-      function GetHideCaret: boolean;
-      procedure SetPrompt(const AValue: string);
-      function GetLine(const withPrompt: boolean = true; const back : integer = 0) : string;
-      function GetCurrentLine() : string;
-      procedure SpinnerCallback(const AText: string; const rewriteLine : boolean = false );
-    protected
-      function CanMoveCaret(const X, Y: integer) : boolean;
-      procedure ConstrainCaret(const caret: TATCaretItem; const afterPrompt: boolean= false);
-      procedure PositionCaretAtTheEnd(const caret: TATCaretItem);
-      property HideCaret : boolean read GetHideCaret;
-    public
-      constructor Create(const editor: TATSynEdit);
-      procedure DoCommandEntered();
-      procedure DoCancelRequest();
-      procedure DoReqestHistory(const prev : boolean);
-      procedure StopAsync(const AText: string);
-      procedure AddLine(const line: string);
-      procedure Activate();
-      property BlockedInput: boolean read FBlockedInput;
-      property OnBoot : TBoot read FOnBoot write FOnBoot;
-      property OnCancelRequest: TCancelRequest read FOnCancelRequest write FOnCancelRequest;
-      property OnCommandExecute: TCommandExecuteEvent read FOnCommandExecute write FOnCommandExecute;
-      property OnRequestHistory: TRequestHistory read FOnRequestHistory write FOnRequestHistory;
-      property Prompt : string read FPrompt write SetPrompt;
   end;
 
 const
@@ -4818,6 +4770,7 @@ begin
   FMarginList:= nil;
   FFoldedMarkList:= nil;
 
+  FOptFlickerReducingPause:= 0;
   FOptInputNumberOnly:= false;
   FOptInputNumberAllowNegative:= cInitInputNumberAllowNegative;
   FOptMaskChar:= cInitMaskChar;
@@ -5075,10 +5028,6 @@ begin
   FMenuMinimap:= nil;
   FMenuMicromap:= nil;
   FMenuRuler:= nil;
-
-  // Console mode
-  FOptConsoleMode:= true;
-  FConsoleMode:= TATConsole.Create(self);
 
   //must call UpdateTabHelper also before first Paint
   UpdateTabHelper;
@@ -5348,7 +5297,6 @@ begin
     OptWrapMode:= cWrapOff;
     OptScrollStyleHorz:= aessHide;
     OptScrollStyleVert:= aessHide;
-    OptMouseMiddleClickAction:= mcaNone;
     OptMouseDragDrop:= false;
     OptMarginRight:= 1000;
     OptUndoLimit:= 200;
@@ -5635,6 +5583,9 @@ var
   NLine: integer;
 begin
   if not HandleAllocated then exit;
+
+  if Assigned(OnPaint) then
+    OnPaint(Self);
 
   FPaintWorking:= true;
   try
@@ -6159,8 +6110,11 @@ begin
       case FOptMouseMiddleClickAction of
         mcaScrolling:
           begin
-            FMouseNiceScrollPos:= Point(X, Y);
-            MouseNiceScroll:= true;
+            if not ModeOneLine then
+            begin
+              FMouseNiceScrollPos:= Point(X, Y);
+              MouseNiceScroll:= true;
+            end;
           end;
         mcaPaste:
           begin
@@ -6170,7 +6124,7 @@ begin
           end;
         mcaGotoDefinition:
           begin
-            if cCommand_GotoDefinition>0 then
+            if (not ModeOneLine) and (cCommand_GotoDefinition>0) then
             begin
               DoCaretSingle(PosTextClicked.X, PosTextClicked.Y);
               DoCommand(cCommand_GotoDefinition, cInvokeInternal);
@@ -6200,16 +6154,12 @@ begin
         FMouseDragDropping:= true;
       end
       else
-      begin // a single simple click move
-        if (FOptConsoleMode and FConsoleMode.CanMoveCaret(FMouseDownPnt.X, FMouseDownPnt.Y))
-           or (not FOptConsoleMode) then begin
+      begin
+        if Assigned(FOnClickMoveCaret) then
+          FOnClickMoveCaret(Self, Point(Carets[0].PosX, Carets[0].PosY), FMouseDownPnt);
 
-          if Assigned(FOnClickMoveCaret) then
-            FOnClickMoveCaret(Self, Point(Carets[0].PosX, Carets[0].PosY), FMouseDownPnt);
-
-          DoCaretSingle(FMouseDownPnt.X, FMouseDownPnt.Y);
-          DoSelect_None;
-        end;
+        DoCaretSingle(FMouseDownPnt.X, FMouseDownPnt.Y);
+        DoSelect_None;
       end;
     end;
 
@@ -7019,9 +6969,10 @@ begin
 
   if Assigned(AdapterForHilite) and
     AdapterForHilite.ImplementsDataReady and
-    not AForceRepaint then
+    not AForceRepaint and
+    not (cIntFlagResize in FPaintFlags) then
   begin
-    if ATEditorOptions.FlickerReducingPause>=1000 then
+    if FOptFlickerReducingPause>=1000 then
       //value 1000 is the special value of CudaText option "renderer_anti_flicker"
     begin
       if not AdapterForHilite.IsDataReadyPartially then
@@ -7030,10 +6981,10 @@ begin
       end;
     end
     else
-    if ATEditorOptions.FlickerReducingPause>0 then
+    if FOptFlickerReducingPause>0 then
     begin
       FTimerFlicker.Enabled:= false;
-      FTimerFlicker.Interval:= ATEditorOptions.FlickerReducingPause;
+      FTimerFlicker.Interval:= FOptFlickerReducingPause;
       FTimerFlicker.Enabled:= FTimersEnabled;
       exit;
     end;
@@ -7084,8 +7035,6 @@ procedure TATSynEdit.TimerBlinkTick(Sender: TObject);
 begin
   if not FCaretShowEnabled then exit;
   if not Application.Active then exit;
-
-  if FOptConsoleMode and FConsoleMode.HideCaret then exit;
 
   if FCaretStopUnfocused and not _IsFocused then
     if FCaretShown then
@@ -9826,12 +9775,12 @@ end;
 function TATSynEdit.UpdateLinksRegexObject: boolean;
 begin
   Result:= false;
+  if FOptShowURLsRegex='' then exit;
 
   if FRegexLinks=nil then
     FRegexLinks:= TRegExpr.Create;
 
   try
-    //FRegexLinks.UseUnicodeWordDetection:= false; //faster for links
     FRegexLinks.ModifierS:= false;
     FRegexLinks.ModifierM:= false; //M not needed
     FRegexLinks.ModifierI:= false; //I not needed to find links
@@ -10232,183 +10181,6 @@ begin
     FStringsInt.OnSetAttribsArray:= nil;
   end;
 end;
-
-{ TATConsole }
-
-procedure TATConsole.SetPrompt(const AValue: string);
-begin
-  if FPrompt=AValue then Exit;
-  FPrompt:=AValue;
-end;
-
-function TATConsole.GetHideCaret: boolean;
-begin
-  result := FSpinner.IsActive;
-end;
-
-function TATConsole.GetLine(const withPrompt: boolean; const back: integer
-  ): string;
-begin
-  result := FEditor.Strings.Lines[FEditor.Strings.count-(1+back)];
-  if not withPrompt then
-    delete(result, 1, UTF8LengthFast(FPrompt));
-end;
-
-function TATConsole.GetCurrentLine(): string;
-begin
-  result := GetLine();
-end;
-
-procedure TATConsole.SpinnerCallback(const AText: string;
-  const rewriteLine: boolean);
-begin
-  FEditor.Strings.Lines[FEditor.Strings.count-1] := AText;
-  FEditor.Invalidate;
-end;
-
-constructor TATConsole.Create(const editor: TATSynEdit);
-var
-  fixedWidthFontList : TFixedWidthFontList;
-begin
-  FEditor := editor;
-  FActive := false;
-
-  FBlockedInput := false;
-
-  FSpinner := TConsoleSpinner.Create(@SpinnerCallback);
-  //FEditor.Strings.Lines[0] :=  FEditor.Strings.Lines[0] + FEditor.Strings.Count.ToString();
-  FEditor.OptGutterVisible:= false;
-  FEditor.OptRulerVisible:=  false;
-  //FEditor.OptMouseDragDrop:= false;
-  FEditor.OptUnprintedVisible:= false;
-  FEditor.FOptShowMouseSelFrame:= false;
-  FEditor.FOptAutoIndentBetterBracketsCurly:= false;
-  FEditor.FOptAutoIndentBetterBracketsRound:= false;
-  FEditor.FOptAutoIndentBetterBracketsSquare:= false;
-  FEditor.FOptMouseClickOpensURL:= true;
-  FEditor.FOptCopyLinesIfNoSel := false; // TATSynEdit has the option to copy the current line to clipboard if nothing selected. This option prevents canceling a command. So disable it
-  FEditor.FMarginRight := 5000; // hiding the margin even on 4k displays
-  FEditor.FWrapMode := TATEditorWrapMode.cWrapOn; // wrap on window border
-  FEditor.OptCaretManyAllowed:= false;
-
-  FEditor.Colors.TextFont:= clWhite;
-  FEditor.Colors.TextBG:= clBlack;
-
-  fixedWidthFontList := TFixedWidthFontList.Create();
-  FEditor.Font.Name := fixedWidthFontList.GetFontWithDefault('Consolas', '');
-  FEditor.Font.Size:=18;
-  FreeAndNil(fixedWidthFontList);
-
-  ConstrainCaret(FEditor.Carets[0]);
-  //FEditor.ModeOneLine:=true;
-end;
-
-function TATConsole.CanMoveCaret(const X, Y: integer): boolean;
-begin
-  result := (X >= FPrompt.Length + 1) and (Y + 1 = FEditor.Strings.Count);
-end;
-
-procedure TATConsole.ConstrainCaret(const caret: TATCaretItem;
-  const afterPrompt: boolean);
-begin
-  if caret.PosX < FPrompt.Length + 1  then begin
-    if afterPrompt then
-      caret.PosX := UTF8LengthFast(FPrompt)+1
-    else
-      caret.PosX := UTF8LengthFast(GetCurrentLine())+1;
-  end;
-
-  if caret.PosY <> FEditor.Strings.Count -1 then
-    caret.PosY := FEditor.Strings.Count - 1;
-end;
-
-procedure TATConsole.DoCommandEntered();
-var
-  status : TCommandExecuteResult;
-  commandResult : string;
-begin
-  if not Assigned(FOnCommandExecute) then exit();
-  FOnCommandExecute(self, GetLine(false,1).Trim(), status, commandResult);
-  case status of
-
-    cerAsync: begin
-      FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
-    end;
-
-    cerSync: begin
-      if commandResult <> '' then
-        FEditor.Strings.LineAdd(commandResult);
-      FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
-    end;
-
-    cerAsyncWait: begin
-      FBlockedInput := true;
-      FEditor.FCaretShowEnabled := false;
-      FEditor.Strings.Lines[FEditor.Strings.Count-1] := ' ';
-      FSpinner.Start();
-      FBlockedInput:= true;
-
-    end;
-  end;
-  ConstrainCaret(FEditor.Carets[0]);
-end;
-
-procedure TATConsole.DoCancelRequest();
-begin
-  if Assigned(FOnCancelRequest) then
-    FOnCancelRequest(self);
-end;
-
-procedure TATConsole.DoReqestHistory(const prev: boolean);
-var
-  historyItem : string;
-begin
-  if not Assigned(FOnRequestHistory) then exit();
-
-  FOnRequestHistory(self,prev,historyItem);
-
-  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt + ' ' + historyItem;
-  FEditor.Carets[0].PosX:= UTF8LengthFast(FEditor.Strings.Lines[FEditor.Strings.Count-1]);
-end;
-
-procedure TATConsole.StopAsync(const AText: string);
-begin
-  if not FBlockedInput then exit; // not BlockedInput so the console is not in "async" mode
-
-  FSpinner.Stop();
-
-
-  FEditor.Strings.Lines[FEditor.Strings.Count-1] := AText;
-  FEditor.Strings.LineAddRaw(FPrompt,TATLineEnds.cEndNone,false); // add the prompt without adding a newline at the end. So it doesn't create another line
-
-  FBlockedInput := false;
-  FEditor.FCaretShowEnabled := true;
-  ConstrainCaret(FEditor.Carets[0]);
-
-end;
-
-procedure TATConsole.AddLine(const line: string);
-begin
-  FEditor.Strings.LineAdd(line);
-end;
-
-procedure TATConsole.Activate();
-
-begin
-  if FActive then exit; // Activate cann only be called once. Raise exception???
-
-  if Assigned(FOnBoot) then FOnBoot(self, FPrompt);
-  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
-  ConstrainCaret(FEditor.Carets[0]);
-
-  FActive:= true;
-end;
-
-procedure TATConsole.PositionCaretAtTheEnd(const caret: TATCaretItem);
-begin
-  caret.PosX := UTF8LengthFast(GetCurrentLine());
-end;
-
 
 {$I atsynedit_carets.inc}
 {$I atsynedit_hilite.inc}

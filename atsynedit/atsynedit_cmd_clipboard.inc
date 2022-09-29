@@ -299,11 +299,6 @@ var
 begin
   SNewText:= GetTextForClipboard;
 
-  if (SNewText = '') and FOptConsoleMode then begin
-    FConsoleMode.DoCancelRequest();
-    exit([cResultText]);
-  end;
-
   if IsSelColumn then
   begin
     //copy column block

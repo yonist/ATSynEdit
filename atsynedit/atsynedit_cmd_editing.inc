@@ -49,7 +49,6 @@ var
 begin
   Result:= [];
   if ModeReadOnly then Exit;
-  if FOptConsoleMode and FConsoleMode.BlockedInput then exit; // Console mode, exit on blocked input
   TextItems:= nil;
   St:= Strings;
 
@@ -64,14 +63,8 @@ begin
     if bNeedGroup then
       St.BeginUndoGroup;
 
-    if Carets.IsSelection then begin
-      if not FOptConsoleMode then
-        Result:= DoCommand_TextDeleteSelection
-      else begin
-        Carets[0].SelectNone();
-        Console.ConstrainCaret(Carets[0]);
-      end
-    end;
+    if Carets.IsSelection then
+      Result:= DoCommand_TextDeleteSelection;
 
     //TextItems allows to insert each clipboard line into its own caret
     //when count of carets = count of clipboard lines
@@ -273,8 +266,6 @@ begin
       PosAfter);
     Caret.PosX:= PosAfter.X;
     Caret.PosY:= PosAfter.Y;
-    if FOptConsoleMode then // Console mode
-       FConsoleMode.ConstrainCaret(Caret);
     Caret.EndX:= -1;
     Caret.EndY:= -1;
 
@@ -330,14 +321,6 @@ var
 begin
   Result:= [];
   if ModeReadOnly then Exit;
-
-  if FOptConsoleMode then begin // Console mode
-     Carets[0].GetRange(X1, Y1, X2, Y2, bSel);
-     if Y1 <> Y2 then
-        exit;
-  end;
-
-
   St:= Strings;
 
   if not IsSelRectEmpty and not OptCaretManyAllowed then
@@ -471,7 +454,6 @@ begin
   Result:= [];
   if ModeReadOnly then Exit;
   if ModeOneLine then Exit;
-  if FOptConsoleMode and FConsoleMode.BlockedInput then Exit;
 
   St:= Strings;
   bNeedGroup:= Carets.Count>1;
@@ -480,10 +462,6 @@ begin
     St.BeginUndoGroup;
 
   DoSelectionDeleteOrReset;
-
-  // Assuming there is only one cursor...
-  if FOptConsoleMode then // Console mode
-    FConsoleMode.PositionCaretAtTheEnd(FCarets[0]);
 
   for iCaret:= FCarets.Count-1 downto 0 do
   begin
@@ -531,10 +509,6 @@ begin
 
   if bNeedGroup then
     St.EndUndoGroup;
-
-  if FOptConsoleMode then // Console mode
-    FConsoleMode.DoCommandEntered();
-
 
   Result:= [cResultText, cResultCaretBottom];
 end;

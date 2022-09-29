@@ -4,6 +4,22 @@ object Form1: TForm1
   Top = 124
   Width = 1341
   Caption = 'Form1'
+  ClientHeight = 588
+  ClientWidth = 1341
   OnCreate = FormCreate
+  OnKeyDown = FormKeyDown
   LCLVersion = '2.0.10.0'
+  object ATSynEdit1: TATSynEdit
+    Left = 0
+    Height = 588
+    Top = 0
+    Width = 1341
+    Align = alClient
+    DoubleBuffered = True
+    Font.Height = -12
+    Font.Name = 'Courier New'
+    ParentFont = False
+    TabOrder = 0
+    TabStop = True
+  end
 end
