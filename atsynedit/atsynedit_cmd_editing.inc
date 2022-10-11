@@ -510,6 +510,9 @@ begin
   if bNeedGroup then
     St.EndUndoGroup;
 
+  if Assigned(FOnCmdExecuteRequest) then
+    FOnCmdExecuteRequest(self);
+
   Result:= [cResultText, cResultCaretBottom];
 end;
 

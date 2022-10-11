@@ -466,6 +466,9 @@ const
     + cUrlRegex_WebAnchor;
   cUrlRegexInitial = cUrlRegex_Email + '|' + cUrlRegex_Web;
 
+const
+  AFTER_MESSAGES_PROCCESSED = WM_USER + 739;
+
 var
   cRectEmpty: TRect = (Left: 0; Top: 0; Right: 0; Bottom: 0);
 
@@ -813,6 +816,8 @@ type
     FEventMapDone: TSimpleEvent; //fired by MinimapThread, when it's work done
     FColorOfStates: array[TATLineState] of TColor;
     FFoldingAsStringTodo: string;
+    FOnAfterMessagesProcessed: TNotifyEvent;
+    FOnCmdExecuteRequest: TNotifyEvent;
 
     //these options are implemented in CudaText, they are dummy here
     FOptThemed: boolean;
@@ -1733,6 +1738,8 @@ type
     procedure WMVScroll(var Msg: TLMVScroll); message LM_VSCROLL;
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
 
+    procedure MSAfterMessagesProcessed(var msg : TMessage); message AFTER_MESSAGES_PROCCESSED;
+
     {$ifdef windows}
     procedure WMIME_Request(var Msg: TMessage); message WM_IME_REQUEST;
     procedure WMIME_Notify(var Msg: TMessage); message WM_IME_NOTIFY;
@@ -1785,6 +1792,8 @@ type
     property OnResize;
     property OnUTF8KeyPress;
     //events new
+    property OnAfterMessagesProcessed: TNotifyEvent read FOnAfterMessagesProcessed write FOnAfterMessagesProcessed;
+    property OnCmdExecuteRequest: TNotifyEvent read FOnCmdExecuteRequest write FOnCmdExecuteRequest;
     property OnClickDouble: TATSynEditClickEvent read FOnClickDbl write FOnClickDbl;
     property OnClickTriple: TATSynEditClickEvent read FOnClickTriple write FOnClickTriple;
     property OnClickMiddle: TATSynEditClickEvent read FOnClickMiddle write FOnClickMiddle;
@@ -2758,6 +2767,7 @@ begin
   begin
     NPage:= Max(1, GetVisibleLines)-1;
     NMax:= Max(0, FWrapInfo.Count-1); //must be 0 for single line text
+
     if FOptLastLineOnTop then
       Inc(NMax, NPage);
     NPosLast:= Max(0, NMax-NPage);
@@ -7668,6 +7678,7 @@ begin
   else
     FScrollVert.SetLast;
 
+
   FScrollHorz.NPixelOffset:= 0;
   FScrollVert.NPixelOffset:= 0;
 
@@ -8570,6 +8581,13 @@ begin
     VK_DOWN: Message.Result:= 1;
     else inherited;
   end;
+end;
+
+procedure TATSynEdit.MSAfterMessagesProcessed(var msg: TMessage);
+begin
+  if Assigned(FOnAfterMessagesProcessed) then
+    FOnAfterMessagesProcessed(self);
+
 end;
 
 {$ifdef GTK2_IME_CODE}

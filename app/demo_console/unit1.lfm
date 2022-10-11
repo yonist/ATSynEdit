@@ -1,19 +1,19 @@
 object Form1: TForm1
-  Left = 505
-  Height = 588
-  Top = 124
-  Width = 1341
+  Left = 308
+  Height = 558
+  Top = 138
+  Width = 1211
   Caption = 'Form1'
-  ClientHeight = 588
-  ClientWidth = 1341
+  ClientHeight = 558
+  ClientWidth = 1211
   OnCreate = FormCreate
   OnKeyDown = FormKeyDown
   LCLVersion = '2.0.10.0'
   object ATSynEdit1: TATSynEdit
     Left = 0
-    Height = 588
+    Height = 558
     Top = 0
-    Width = 1341
+    Width = 1211
     Align = alClient
     DoubleBuffered = True
     Font.Height = -12
@@ -21,5 +21,21 @@ object Form1: TForm1
     ParentFont = False
     TabOrder = 0
     TabStop = True
+    OnChange = ATSynEdit1Change
+  end
+  object Button1: TButton
+    Left = 1096
+    Height = 25
+    Top = 497
+    Width = 75
+    Caption = 'Button1'
+    OnClick = Button1Click
+    TabOrder = 1
+  end
+  object Timer1: TTimer
+    Enabled = False
+    OnTimer = Timer1Timer
+    Left = 1240
+    Top = 32
   end
 end
