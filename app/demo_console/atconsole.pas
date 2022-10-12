@@ -64,6 +64,7 @@ type
     private
       FActive : boolean;
       FBlockedInput : boolean; // in async command, the control is blocked for keyboard input
+      FClearCursor: boolean;
       FEditor: TATSynEdit;
       FMouseXCord: integer; // the position of the Cursor when the user clicks on the mouse button. Save it inorder to be able to retrive it incase the user exit the command line
       FOnBoot: TBoot;
@@ -73,7 +74,6 @@ type
       FPrompt: string;
       FReturnFlag : boolean;
       FSpinner: TConsoleSpinner;
-      FUserRequest : word;
       procedure CalcCaretsCoords(Sender: TObject);
       function CanMoveCaret(const X, Y: integer): boolean;
       procedure CaretToEndOfLine();
@@ -88,6 +88,7 @@ type
       procedure MouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
       procedure SetPrompt(const AValue: string);
       procedure SpinnerCallback(const AText: string; const rewriteLine : boolean = false );
+      procedure AfterMessageProcessed(sender : TObject);
     public
       procedure Active();
       procedure EndAsyncCommand(const commandResult : string);
@@ -121,6 +122,20 @@ procedure TATConsole.SpinnerCallback(const AText: string;
 begin
   FEditor.Strings.Lines[FEditor.Strings.count-2] := AText;
   FEditor.Invalidate;
+end;
+
+procedure TATConsole.AfterMessageProcessed(sender: TObject);
+begin
+//  Application.ProcessMessages();
+  PostMessage(FEditor.Handle, WM_KEYDOWN, VK_HOME, 0);
+  Application.ProcessMessages();
+  PostMessage(FEditor.Handle, WM_KEYDOWN, VK_HOME, 0);
+
+//  FEditor.Update(true);
+  if FClearCursor then begin
+    FEditor.Carets.Clear;
+    FClearCursor:= false;
+  end;
 end;
 
 procedure TATConsole.CmdExecuteRequest(Sender: TObject);
@@ -162,13 +177,14 @@ begin
      commandResultTmp := 'Command canceled upon user request'
   else
     commandResultTmp := commandResult;
-  FEditor.Strings.Lines[FEditor.Strings.Count-1] := commandResultTmp;
-  FEditor.Strings.LineAddRaw(FPrompt,cEndNone,false);
+  FEditor.Strings.Lines[FEditor.Strings.Count-2] := commandResultTmp;
+  FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt + ' ';
+//  FEditor.Strings.LineAddRaw(FPrompt,cEndNone,false);
   FEditor.Carets.Add(UTF8LengthFast(FPrompt)+ 1, FEditor.Strings.Count-1);
   FBlockedInput:=false;
   FEditor.Update(true);
   ConstrainCaret(true);
-//  PostMessage(FEditor.Handle, WM_KEYDOWN , VK_SPACE , 0);
+
 end;
 
 procedure TATConsole.KeyDown(Sender: TObject; var Key: Word; Shift: TShiftState
@@ -220,6 +236,9 @@ procedure TATConsole.CalcCaretsCoords(Sender: TObject);
 var
   caret : TATCaretItem;
 begin
+  if FEditor.Carets.Count = 0 then // in async command the caret is invisible
+    exit();
+
   caret := FEditor.Carets[0];
   if FMouseXCord <> -1 then begin // position changed due to mouse activity
     if caret.PosY <> FEditor.Strings.Count - 1 then
@@ -313,14 +332,19 @@ begin
       if commandResult <> '' then
         FEditor.Strings.LineAdd(commandResult);
       FEditor.Strings.Lines[FEditor.Strings.Count-1] := FPrompt;
+
+      PostMessage(FEditor.Handle, AFTER_MESSAGES_PROCCESSED, 1,0);
     end;
 
     crmAsyncWait: begin
       FBlockedInput := true;
       FEditor.Strings.LineAdd(' ');
       FEditor.Strings.Lines[FEditor.Strings.Count-1] := ' ';
-      FEditor.Carets.Clear;
+      FClearCursor:= true;
+      //FEditor.Update(true);
+      //FEditor.Carets.Clear;
       FSpinner.Start();
+      PostMessage(FEditor.Handle, AFTER_MESSAGES_PROCCESSED, 1,0);
     end;
   end;
 
@@ -342,7 +366,6 @@ begin
   //FEditor.Strings.Lines[0] :=  FEditor.Strings.Lines[0] + FEditor.Strings.Count.ToString();
   FEditor.OptGutterVisible:= false;
   FEditor.OptRulerVisible:=  false;
-  //FEditor.OptMouseDragDrop:= false;
   FEditor.OptUnprintedVisible:= false;
   FEditor.OptShowMouseSelFrame:= false;
   FEditor.OptAutoIndentBetterBracketsCurly:= false;
@@ -359,8 +382,6 @@ begin
   FEditor.Colors.TextFont:= clWhite;
   FEditor.Colors.TextBG:= clBlack;
 
-
-
   fixedWidthFontList := TFixedWidthFontList.Create();
   FEditor.Font.Name := fixedWidthFontList.GetFontWithDefault('Consolas', '');
   FEditor.Font.Size:=18;
@@ -371,6 +392,7 @@ begin
   FEditor.OnMouseUp:= @MouseUp;
   FEditor.OnCalcCaretsCoords:= @CalcCaretsCoords;
   FEditor.OnCmdExecuteRequest:= @CmdExecuteRequest;
+  FEditor.OnAfterMessagesProcessed:=@AfterMessageProcessed;
 
   FReturnFlag := false;
 

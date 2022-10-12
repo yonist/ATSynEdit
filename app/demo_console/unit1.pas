@@ -79,7 +79,10 @@ begin
   FATConsole.OnCommandExecute:= @CommandExecute;
   FATConsole.OnBoot:= @Boot;
   FATConsole.OnRequestHistory:= @RequestHistory;
+  FATConsole.OnCancelRequest:= @CancelRequest;
   FATConsole.Active();
+
+  FAsyncCounter := 0;
 
   FHistory := TStringList.Create;
 
@@ -95,7 +98,7 @@ begin
   if FAsyncCounter mod 3 = 0 then begin
     Timer1.Enabled:= false;
     FATConsole.EndAsyncCommand('Async command ended.. ');
-
+    FAsyncCounter:= 0;
   end;
 end;
 
@@ -127,9 +130,9 @@ procedure TForm1.CancelRequest(const sender: TATConsole;
   var commandResult: string);
 
 begin
-  commandResult := '';
 
-//  console.StopAsync('Command canceled');
+  Timer1.Enabled:= false;
+    FAsyncCounter:= 0;
 end;
 
 procedure TForm1.RequestHistory(const Sender: TATConsole; const prev: boolean;
