@@ -22,7 +22,6 @@ type
       Shift: TShiftState);
     procedure Button1Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
-    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure Timer1Timer(Sender: TObject);
   private
     FATConsole : TATConsole;
@@ -87,11 +86,7 @@ begin
   //FATSynEdit1.Console.Activate();
 end;
 
-procedure TForm1.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState
-  );
-begin
 
-end;
 
 procedure TForm1.Timer1Timer(Sender: TObject);
 begin
