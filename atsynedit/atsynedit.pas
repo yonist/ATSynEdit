@@ -466,9 +466,6 @@ const
     + cUrlRegex_WebAnchor;
   cUrlRegexInitial = cUrlRegex_Email + '|' + cUrlRegex_Web;
 
-const
-  AFTER_MESSAGES_PROCCESSED = WM_USER + 739;
-
 var
   cRectEmpty: TRect = (Left: 0; Top: 0; Right: 0; Bottom: 0);
 
@@ -816,7 +813,6 @@ type
     FEventMapDone: TSimpleEvent; //fired by MinimapThread, when it's work done
     FColorOfStates: array[TATLineState] of TColor;
     FFoldingAsStringTodo: string;
-    FOnAfterMessagesProcessed: TNotifyEvent;
     FOnCmdExecuteRequest: TNotifyEvent;
 
     //these options are implemented in CudaText, they are dummy here
@@ -1738,7 +1734,6 @@ type
     procedure WMVScroll(var Msg: TLMVScroll); message LM_VSCROLL;
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
 
-    procedure MSAfterMessagesProcessed(var msg : TMessage); message AFTER_MESSAGES_PROCCESSED;
 
     {$ifdef windows}
     procedure WMIME_Request(var Msg: TMessage); message WM_IME_REQUEST;
@@ -1792,7 +1787,6 @@ type
     property OnResize;
     property OnUTF8KeyPress;
     //events new
-    property OnAfterMessagesProcessed: TNotifyEvent read FOnAfterMessagesProcessed write FOnAfterMessagesProcessed;
     property OnCmdExecuteRequest: TNotifyEvent read FOnCmdExecuteRequest write FOnCmdExecuteRequest;
     property OnClickDouble: TATSynEditClickEvent read FOnClickDbl write FOnClickDbl;
     property OnClickTriple: TATSynEditClickEvent read FOnClickTriple write FOnClickTriple;
@@ -8583,12 +8577,6 @@ begin
   end;
 end;
 
-procedure TATSynEdit.MSAfterMessagesProcessed(var msg: TMessage);
-begin
-  if Assigned(FOnAfterMessagesProcessed) then
-    FOnAfterMessagesProcessed(self);
-
-end;
 
 {$ifdef GTK2_IME_CODE}
 // fcitx IM

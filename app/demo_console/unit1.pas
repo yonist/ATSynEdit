@@ -13,7 +13,6 @@ type
   { TForm1 }
 
   TForm1 = class(TForm)
-    ATSynEdit1: TATSynEdit;
     Button1: TButton;
     Timer1: TTimer;
     procedure ATSynEdit1Change(Sender: TObject);
@@ -75,7 +74,9 @@ end;
 procedure TForm1.FormCreate(Sender: TObject);
 begin
 
-  FATConsole := TATConsole.Create(ATSynEdit1);
+  FATConsole := TATConsole.Create(self);
+  FATConsole.Parent := self;
+  FATConsole.Align:= alClient;
   FATConsole.OnCommandExecute:= @CommandExecute;
   FATConsole.OnBoot:= @Boot;
   FATConsole.OnRequestHistory:= @RequestHistory;
