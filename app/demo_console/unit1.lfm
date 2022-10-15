@@ -17,6 +17,28 @@ object Form1: TForm1
     OnClick = Button1Click
     TabOrder = 0
   end
+  object ATSynEdit1: TATSynEdit
+    Left = 64
+    Height = 338
+    Top = 32
+    Width = 480
+    DoubleBuffered = True
+    Font.Height = -12
+    Font.Name = 'Courier New'
+    ParentFont = False
+    TabOrder = 1
+    TabStop = True
+    Visible = False
+  end
+  object Button2: TButton
+    Left = 976
+    Height = 25
+    Top = 497
+    Width = 75
+    Caption = 'Button2'
+    OnClick = Button2Click
+    TabOrder = 2
+  end
   object Timer1: TTimer
     Enabled = False
     OnTimer = Timer1Timer

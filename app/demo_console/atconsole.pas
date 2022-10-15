@@ -5,7 +5,7 @@ unit ATConsole;
 interface
 
 uses
-  Windows,LCLType, Classes, SysUtils, controls,  CustomTimer, ATSynEdit;
+  Windows,LCLType, Classes, SysUtils, controls,  graphics, CustomTimer, ATSynEdit, ATSynEdit_LineParts, ATStrings;
 
 
 const
@@ -18,12 +18,32 @@ type
                      crmAsyncWait // the command will run in async but the console will wait on input
                     );
 
-  TConsoleSpinnerType = (csDots, csDots4, csPipes); // the look of the spinner
+
+  // A class to
+
+  { TATConsoleStrings }
+
+  TATConsoleStrings = class sealed
+    const
+      LINE_COMMAND: string = 'c';
+      LINE_RESULT:  string = 'r';
+      LINE_SPINNER: string = 's';
+    private
+      FMetadata : TStringList;
+      FATStrings: TATStrings;
+    public
+      constructor Create(const atstrings: TATStrings);
+      destructor Destroy(); override;
+      procedure Add(const line, kind, nextLineKind: string);
+      procedure ChangeKind(const kind:string; const index: integer);
+  end;
+
+  TConsoleSpinnerType = (csDots, csDots4, csPipes, csClock); // the look of the spinner
 
 
   { TConsoleSpinner }
 
-  TConsoleSpinner = class
+  TConsoleSpinner = class sealed
     type
        TWriteCallback = procedure(const AText: string; const rewriteLine : boolean = false ) of object;
     private
@@ -39,7 +59,7 @@ type
       constructor Create(const aWriteCallback : TWriteCallback);
       destructor Destroy(); override;
       property IsActive : boolean read FActive;
-      procedure Start(const aSpinnerType : TConsoleSpinnerType= csDots);
+      procedure Start(const aSpinnerType : TConsoleSpinnerType= csClock);
       procedure Stop();
   end;
 
@@ -70,6 +90,7 @@ type
       FActive : boolean;
       FBlockedInput : boolean; // in async command, the control is blocked for keyboard input
       FClearCursor: boolean;
+      FConsoleStrings: TATConsoleStrings;
       FMouseXCord: integer; // the position of the Cursor when the user clicks on the mouse button. Save it inorder to be able to retrive it incase the user exit the command line
       FOnBoot: TBoot;
       FOnCancelRequest: TCancelRequest;
@@ -90,6 +111,8 @@ type
       procedure SetPrompt(const AValue: string);
       procedure SpinnerCallback(const AText: string; const rewriteLine : boolean = false );
       procedure MSAfterMessagesProcessed(var msg : TMessage); message AFTER_MESSAGES_PROCCESSED;
+      procedure CalcHilite(Sender: TObject; var AParts: TATLineParts;
+                             ALineIndex, ACharIndex, ALineLen: integer; var AColorAfterEol: TColor);
     protected
       procedure KeyDown(var Key: Word; Shift: TShiftState); override;
       procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
@@ -97,6 +120,7 @@ type
     public
       procedure Active();
       procedure EndAsyncCommand(const commandResult : string);
+      property ConsoleStrings: TATConsoleStrings read FConsoleStrings;
       property OnBoot : TBoot read FOnBoot write FOnBoot;
       property OnCancelRequest: TCancelRequest read FOnCancelRequest write FOnCancelRequest;
       property OnCommandExecute: TCommandExecuteEvent read FOnCommandExecute write FOnCommandExecute;
@@ -110,7 +134,35 @@ type
 implementation
 
 uses
-  LCLIntf, LazUTF8, ATSynEdit_Carets,ATStringProc, forms ,graphics;
+  LCLIntf, LazUTF8, ATSynEdit_Carets,ATStringProc, forms, dialogs;
+
+{ TATConsoleStrings }
+
+constructor TATConsoleStrings.Create(const atstrings: TATStrings);
+begin
+  FMetaData := TStringList.Create();
+  FATStrings:= atstrings;
+end;
+
+destructor TATConsoleStrings.Destroy();
+begin
+  FMetadata.Free();
+  inherited;
+end;
+
+procedure TATConsoleStrings.Add(const line, kind, nextLineKind: string);
+begin
+  FMetadata.Add(kind);
+  FATStrings.LineAdd(line);
+  FMetadata.Add(nextLineKind);
+end;
+
+
+procedure TATConsoleStrings.ChangeKind(const kind: string; const index: integer
+  );
+begin
+
+end;
 
 { TATConsole }
 
@@ -119,7 +171,7 @@ begin
   if FPrompt=AValue then Exit;
   FPrompt:=AValue;
 
-  Strings.Lines[Strings.Count  -1] := FPrompt;
+  Strings.Lines[Strings.Count - 1] := FPrompt;
 end;
 
 procedure TATConsole.SpinnerCallback(const AText: string;
@@ -131,16 +183,37 @@ end;
 
 procedure TATConsole.MSAfterMessagesProcessed(var msg: TMessage);
 begin
-  //  Application.ProcessMessages();
+  try
     PostMessage(Handle, WM_KEYDOWN, VK_HOME, 0);
     Application.ProcessMessages();
     PostMessage(Handle, WM_KEYDOWN, VK_HOME, 0);
 
-  //  FEditor.Update(true);
-    if FClearCursor then begin
-      Carets.Clear;
+    if FClearCursor then
       FClearCursor:= false;
-    end;
+
+  finally
+    EndUpdate(); // this is a must as the begin update is done in another procedure (HandleReturn) so me must be sure that "EndUpdate" will be performed
+  end;
+end;
+
+procedure TATConsole.CalcHilite(Sender: TObject; var AParts: TATLineParts;
+  ALineIndex, ACharIndex, ALineLen: integer; var AColorAfterEol: TColor);
+var
+  line : string;
+begin
+      OutputDebugString(PChar('test ' + ALineIndex.ToString()));
+  line := Strings.Lines[ALineIndex];
+
+  if line.Contains('>') then begin
+    AParts[0].ColorFont:= clYellow;
+    AParts[0].Len:= line.IndexOf('>') +1;
+
+    AParts[1].Offset := AParts[0].Len;
+    AParts[1].ColorFont:= clWhite;
+    AParts[1].Len := 1000;
+
+  end;
+
 end;
 
 procedure TATConsole.KeyDown(var Key: Word; Shift: TShiftState);
@@ -162,9 +235,11 @@ begin
 
   if not Caret.IsSelection then begin
     case key of
+      VK_BACK: if not CanMoveCaret(caret.PosX - 1, caret.PosY) then key := 0;
       // Set the cursor to the end of line so that the control will process the entire line, otherwise it will "break" it in the middle
       VK_RETURN: CaretToEndOfLine();
-      VK_BACK: if not CanMoveCaret(caret.PosX - 1, caret.PosY) then key := 0;
+      VK_PRIOR, VK_NEXT: key:=0; // Page Down/Up
+
       // VK_HOME: must be constrained _after_ TATEdit processed the message. because the at this point the new values are not set yet...
       VK_LEFT: if not CanMoveCaret(caret.PosX - 1, caret.PosY) then key := 0;
       VK_UP, VK_DOWN: begin
@@ -198,25 +273,30 @@ end;
 procedure TATConsole.Active();
 var
   bootMessage : TStringList;
-  bootPrompt: string;
+  bootPrompt, nextLineKind: string;
   i : integer;
 begin
   if FActive then exit;
   FActive:= true;
 
+  // TODO: on boot for some reason I get 2 CalcHilite event for each row. Begin/End Update didn't help. Investiagte
   if Assigned(FOnBoot) then begin
     try
       bootMessage := TStringList.Create;
       FOnBoot(bootMessage, bootPrompt);
-      for i := 0 to bootMessage.Count -1 do
-        Strings.LineAdd(bootMessage[i]);
+      for i := 0 to bootMessage.Count -1 do begin
+        if i <> bootMessage.Count - 1 then
+          nextLineKind := TATConsoleStrings.LINE_RESULT
+        else
+          nextLineKind := TATConsoleStrings.LINE_COMMAND;
+        FConsoleStrings.Add(bootMessage[i],TATConsoleStrings.LINE_RESULT, nextLineKind);
+      end;
 
       Prompt:= bootPrompt;
     finally
       bootMessage.Free();
     end;
   end;
-
   ConstrainCaret(true);
 end;
 
@@ -231,8 +311,7 @@ begin
     commandResultTmp := commandResult;
   Strings.Lines[Strings.Count-2] := commandResultTmp;
   Strings.Lines[Strings.Count-1] := FPrompt + ' ';
-//  FEditor.Strings.LineAddRaw(FPrompt,cEndNone,false);
-  Carets.Add(UTF8LengthFast(FPrompt)+ 1, Strings.Count-1);
+  CaretShowEnabled:= True;
   FBlockedInput:=false;
   Update(true);
   ConstrainCaret(true);
@@ -251,13 +330,13 @@ begin
     if caret.PosY <> Strings.Count - 1 then
       caret.PosY := Strings.Count - 1;
 
-    if caret.PosX < UTF8LengthFast(FPrompt)+1 then
-        caret.PosX := Max(FMouseXCord, UTF8LengthFast(FPrompt)+1);
+    if caret.PosX < FPrompt.Length+1 then // caret.PosX is Byte based so we need the number of bytes incase prompt conatins 2/4 bytes chars
+        caret.PosX := Max(FMouseXCord, FPrompt.Length+1);
 
   end
   else begin // position change due to keyboard movement
-    if caret.PosX < UTF8LengthFast(FPrompt)+1 then
-        caret.PosX := UTF8LengthFast(FPrompt)+1;
+    if caret.PosX < FPrompt.Length+1 then // caret.PosX is Byte based so we need the number of bytes incase prompt conatins 2/4 bytes chars
+        caret.PosX := FPrompt.Length+1;
   end;
 
 end;
@@ -269,7 +348,7 @@ end;
 
 procedure TATConsole.CaretToEndOfLine();
 begin
-  Carets[0].PosX := UTF8LengthFast(GetCurrentLine());
+  Carets[0].PosX := GetCurrentLine().Length; // caret.PosX is Byte based so we need the number of bytes incase prompt conatins 2/4 bytes chars
 end;
 
 procedure TATConsole.ConstrainCaret(const afterPrompt: boolean);
@@ -288,17 +367,17 @@ begin
    yChanged := false;
 
  if (yChanged) or (caret.PosX < UTF8LengthFast(FPrompt) + 1) then
-   caret.PosX := UTF8LengthFast(FPrompt)+1;
+   caret.PosX := FPrompt.Length+1; // caret.PosX is Byte based so we need the number of bytes incase prompt conatins 2/4 bytes chars
 
  if not afterPrompt then
-   caret.PosX := UTF8LengthFast(GetCurrentLine());
+   caret.PosX := GetCurrentLine().Length; // caret.PosX is Byte based so we need the number of bytes incase prompt conatins 2/4 bytes chars
 
 end;
 
 function TATConsole.GetLine(const withPrompt: boolean; const back: integer
   ): string;
 begin
-  result := Strings.Lines[Strings.count-(1+back)];
+  result := UTF16ToUTF8(Strings.Lines[Strings.count-(1+back)]);
   if not withPrompt then
     delete(result, 1, UTF8LengthFast(FPrompt));
 end;
@@ -328,34 +407,34 @@ var
   runMode: TCommandRunMode;
 begin
   if not Assigned(FOnCommandExecute) then exit();
-  FOnCommandExecute(self, GetLine(false,1).Trim(), runMode, commandResult);
-  case runMode of
+  BeginUpdate;
+  try
+    FOnCommandExecute(self, GetLine(false,1).Trim(), runMode, commandResult);
+    case runMode of
 
-    crmAsync: begin
-      Strings.Lines[Strings.Count-1] := FPrompt;
+      crmAsync: begin
+        Strings.Lines[Strings.Count-1] := FPrompt;
+      end;
+
+      crmSync: begin
+        if commandResult <> '' then
+          FConsoleStrings.Add(commandResult, TATConsoleStrings.LINE_RESULT, TATConsoleStrings.LINE_COMMAND);
+        Strings.Lines[Strings.Count-1] := FPrompt;
+
+      end;
+      crmAsyncWait: begin
+        FBlockedInput := true;
+        FConsoleStrings.Add(' ', TATConsoleStrings.LINE_SPINNER,TATConsoleStrings.LINE_COMMAND);
+        Strings.Lines[Strings.Count-1] := ' ';
+        FClearCursor:= true;
+        CaretShowEnabled:= false;
+        FSpinner.Start();
+      end;
     end;
-
-    crmSync: begin
-      if commandResult <> '' then
-        Strings.LineAdd(commandResult);
-      Strings.Lines[Strings.Count-1] := FPrompt;
-
-      PostMessage(Handle, AFTER_MESSAGES_PROCCESSED, 1,0);
-    end;
-
-    crmAsyncWait: begin
-      FBlockedInput := true;
-      Strings.LineAdd(' ');
-      Strings.Lines[Strings.Count-1] := ' ';
-      FClearCursor:= true;
-      //FEditor.Update(true);
-      //FEditor.Carets.Clear;
-      FSpinner.Start();
-      PostMessage(Handle, AFTER_MESSAGES_PROCCESSED, 1,0);
-    end;
+    ConstrainCaret(true);
+  finally
+    PostMessage(Handle, AFTER_MESSAGES_PROCCESSED, 0, 0); // this is very important! The message handles the "EndUpdate" call for screen repaint
   end;
-
-  ConstrainCaret(true);
 
 end;
 
@@ -370,6 +449,8 @@ begin
   FActive:= false;
   FBlockedInput:= false;
   FMouseXCord:= -1;
+
+  FConsoleStrings := TATConsoleStrings.Create(Strings);
 
   FSpinner:= TConsoleSpinner.Create(@SpinnerCallback);
   //FEditor.Strings.Lines[0] :=  FEditor.Strings.Lines[0] + FEditor.Strings.Count.ToString();
@@ -397,7 +478,8 @@ begin
   FreeAndNil(fixedWidthFontList);
 
   OnCalcCaretsCoords:= @CalcCaretsCoords;
-  OnCmdExecuteRequest:= @CmdExecuteRequest;
+  OnCommandKeyEnter:= @CmdExecuteRequest;
+  OnCalcHilite:= @CalcHilite;
 
   FReturnFlag := false;
 
@@ -511,9 +593,14 @@ begin
   FCounter := 0;
 
   case aSpinnerType of
-    csDots : FSpinnerChars := ['⠈','⠉','⠋','⠓','⠒','⠐','⠐','⠒','⠖','⠦','⠤','⠠','⠠','⠤','⠦','⠖','⠒','⠐','⠐','⠒','⠓','⠋','⠉','⠈'];
-    csDots4 : FSpinnerChars := ['⠄','⠆','⠇','⠋','⠙','⠸','⠰','⠠','⠰','⠸','⠙','⠋','⠇','⠆'];
+    csDots   : FSpinnerChars := ['⠈','⠉','⠋','⠓','⠒','⠐','⠐','⠒','⠖','⠦','⠤','⠠','⠠','⠤','⠦','⠖','⠒','⠐','⠐','⠒','⠓','⠋','⠉','⠈'];
+    csDots4  : FSpinnerChars := ['⠄','⠆','⠇','⠋','⠙','⠸','⠰','⠠','⠰','⠸','⠙','⠋','⠇','⠆'];
     csPipes  : FSpinnerChars := ['┤','┘','┴','└','├','┌','┬','┐'];
+    csClock  : FSpinnerChars := [UTF8String(#$1F550),
+                                 UTF8String(#$1F551),
+                                 UTF8String(#$1F552),
+                                 UTF8String(#$1F553)
+                                 ];
   end;
   FTimer.Enabled := true;
 end;

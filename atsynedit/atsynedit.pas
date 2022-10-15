@@ -700,6 +700,7 @@ type
     FOnDrawRuler: TATSynEditDrawRectEvent;
     FOnCommand: TATSynEditCommandEvent;
     FOnCommandAfter: TATSynEditCommandAfterEvent;
+    FOnCommandKeyEnter: TNotifyEvent;
     FOnCalcCaretsCoords: TNotifyEvent;
     FOnCalcHilite: TATSynEditCalcHiliteEvent;
     FOnCalcStaple: TATSynEditCalcStapleEvent;
@@ -1504,6 +1505,7 @@ type
     property Fold: TATSynRanges read FFold;
     property Carets: TATCarets read FCarets;
     property CaretsSel: TATCaretSelections read FSel; //not used by apps (at 2021.02), but let's publish, to not forget
+    property CaretShowEnabled: boolean read FCaretShowEnabled write FCaretShowEnabled;
     property Markers: TATMarkers read GetMarkers;
     property Attribs: TATMarkers read GetAttribs;
     property Micromap: TATMicromap read FMicromap;
@@ -1787,7 +1789,6 @@ type
     property OnResize;
     property OnUTF8KeyPress;
     //events new
-    property OnCmdExecuteRequest: TNotifyEvent read FOnCmdExecuteRequest write FOnCmdExecuteRequest;
     property OnClickDouble: TATSynEditClickEvent read FOnClickDbl write FOnClickDbl;
     property OnClickTriple: TATSynEditClickEvent read FOnClickTriple write FOnClickTriple;
     property OnClickMiddle: TATSynEditClickEvent read FOnClickMiddle write FOnClickMiddle;
@@ -1809,6 +1810,7 @@ type
     property OnScroll: TNotifyEvent read FOnScroll write FOnScroll;
     property OnCommand: TATSynEditCommandEvent read FOnCommand write FOnCommand;
     property OnCommandAfter: TATSynEditCommandAfterEvent read FOnCommandAfter write FOnCommandAfter;
+    property OnCommandKeyEnter: TNotifyEvent read FOnCommandKeyEnter write FOnCommandKeyEnter;
     property OnDrawBookmarkIcon: TATSynEditDrawBookmarkEvent read FOnDrawBookmarkIcon write FOnDrawBookmarkIcon;
     property OnDrawLine: TATSynEditDrawLineEvent read FOnDrawLine write FOnDrawLine;
     property OnDrawGap: TATSynEditDrawGapEvent read FOnDrawGap write FOnDrawGap;

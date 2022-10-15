@@ -13,13 +13,16 @@ type
   { TForm1 }
 
   TForm1 = class(TForm)
+    ATSynEdit1: TATSynEdit;
     Button1: TButton;
+    Button2: TButton;
     Timer1: TTimer;
     procedure ATSynEdit1Change(Sender: TObject);
     procedure ATSynEdit1ChangeCaretPos(Sender: TObject);
     procedure ATSynEdit1KeyDown(Sender: TObject; var Key: Word;
       Shift: TShiftState);
     procedure Button1Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
   private
@@ -45,7 +48,7 @@ var
 implementation
 
 uses
-  windows;
+  windows , LazUTF8;
 {$R *.lfm}
 
 { TForm1 }
@@ -68,7 +71,15 @@ end;
 
 procedure TForm1.Button1Click(Sender: TObject);
 begin
-   OutputDebugString('***********FIX CLICK*************');
+  ShowMessage(Length(ATSynEdit1.Strings.Lines[0]).ToString());
+  ShowMessage(Length(UTF16toUTF8(ATSynEdit1.Strings.Lines[0])).ToString());
+  ShowMessage(UTF8LengthFast(UTF16toUTF8(ATSynEdit1.Strings.Lines[0])).ToString());
+
+end;
+
+procedure TForm1.Button2Click(Sender: TObject);
+begin
+  ATSynEdit1.Carets[0].PosX:= 5;
 end;
 
 procedure TForm1.FormCreate(Sender: TObject);
@@ -162,9 +173,8 @@ begin
   bootMessage.Add('Welcome');
   bootMessage.Add('You can enter a "calc" command, exmaples: "calc 5+4" or "calc 4+5*4+3" ');
   bootMessage.Add('You can enter the "async" command, to simulate an async command and cancel it with "ctrl+c" ');
-  bootMessage.Add('Afetr you entered several commands you can navigate the history with "↑" and "↓" keys');
+  bootMessage.Add('After you entered several commands you can navigate the history with "↑" and "↓" keys');
   prompt := 'ATConsole >';
-
 end;
 
 function TForm1.evaluate(const expression: string): string;

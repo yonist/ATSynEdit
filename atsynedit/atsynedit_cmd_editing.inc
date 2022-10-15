@@ -510,8 +510,8 @@ begin
   if bNeedGroup then
     St.EndUndoGroup;
 
-  if Assigned(FOnCmdExecuteRequest) then
-    FOnCmdExecuteRequest(self);
+  if Assigned(FOnCommandKeyEnter) then
+      FOnCommandKeyEnter(Self);
 
   Result:= [cResultText, cResultCaretBottom];
 end;
