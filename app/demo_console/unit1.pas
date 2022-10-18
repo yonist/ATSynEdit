@@ -51,6 +51,27 @@ uses
   windows , LazUTF8;
 {$R *.lfm}
 
+
+procedure IterateUTF8(S: String);
+var
+  CurP, EndP: PChar;
+  Len: Integer;
+  ACodePoint: String;
+begin
+  CurP := PChar(S);        // if S='' then PChar(S) returns a pointer to #0
+  EndP := CurP + length(S);
+  while CurP < EndP do
+  begin
+    Len := UTF8CodepointSize(CurP);
+    SetLength(ACodePoint, Len);
+    Move(CurP^, ACodePoint[1], Len);
+    // A single codepoint is copied from the string. Do your thing with it.
+    //ShowMessageFmt('CodePoint=%s, Len=%d', [ACodePoint, Len]);
+    // ...
+    inc(CurP, Len);
+  end;
+end;
+
 { TForm1 }
 
 procedure TForm1.ATSynEdit1ChangeCaretPos(Sender: TObject);
@@ -78,8 +99,30 @@ begin
 end;
 
 procedure TForm1.Button2Click(Sender: TObject);
+var
+  x : string;
+  c : WideChar;
+  MyByteArray :  packed array of byte;
 begin
-  ATSynEdit1.Carets[0].PosX:= 5;
+  x := string(#$F0#$9F#$95#$90) + 'thisררר';
+  IterateUTF8(x);
+  //setLength(MyByteArray, length(x));
+  //Move(x[1], MyByteArray[0], Length(x));
+
+
+
+
+  //ATSynEdit1.Carets[0].PosX:= 5;
+
+  //x := UTF16ToUTF8(UnicodeString(#$1F550));  //(UTF8String(#$F0#$9F#$95#$90);
+  //x.ToCharArray();
+  //ATSynEdit1.Strings.Lines[0] := x;//  UTF8String(#$F0#$9F#$95#$90);//UnicodeString(#$1F550);
+
+
+ // x.To
+//  ATSynEdit1.Strings.Lines[0] := x; //x; //(#$D7#$90);
+ // ATSynEdit1.Invalidate();
+ //UTF8LengthFast();
 end;
 
 procedure TForm1.FormCreate(Sender: TObject);
